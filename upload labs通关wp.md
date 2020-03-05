@@ -227,6 +227,8 @@ Deny from all
 
 白盒测试知道可以修改大小写绕过
 
+漏洞点为服务端--检查后缀--黑名单--后缀大小写绕过
+
 源码
 
 	$is_upload = false;
@@ -259,4 +261,209 @@ Deny from all
 利用方法：上传1.phP
 
 ##Pass-07
+
+黑盒测试知道是黑名单过滤
+
+白盒测试知道可以在文件名结尾添加空格绕过
+
+漏洞点为服务端--检查后缀--黑名单--空格绕过
+
+源码
+
+	$is_upload = false;
+	$msg = null;
+	if (isset($_POST['submit'])) {
+	    if (file_exists(UPLOAD_PATH)) {
+	        $deny_ext = array(".php",".php5",".php4",".php3",".php2",".html",".htm",".phtml",".pht",".pHp",".pHp5",".pHp4",".pHp3",".pHp2",".Html",".Htm",".pHtml",".jsp",".jspa",".jspx",".jsw",".jsv",".jspf",".jtml",".jSp",".jSpx",".jSpa",".jSw",".jSv",".jSpf",".jHtml",".asp",".aspx",".asa",".asax",".ascx",".ashx",".asmx",".cer",".aSp",".aSpx",".aSa",".aSax",".aScx",".aShx",".aSmx",".cEr",".sWf",".swf",".htaccess",".ini");
+	        $file_name = $_FILES['upload_file']['name'];
+	        $file_name = deldot($file_name);//删除文件名末尾的点
+	        $file_ext = strrchr($file_name, '.');
+	        $file_ext = strtolower($file_ext); //转换为小写
+	        $file_ext = str_ireplace('::$DATA', '', $file_ext);//去除字符串::$DATA
+	        
+	        if (!in_array($file_ext, $deny_ext)) {
+	            $temp_file = $_FILES['upload_file']['tmp_name'];
+	            $img_path = UPLOAD_PATH.'/'.date("YmdHis").rand(1000,9999).$file_ext;
+	            if (move_uploaded_file($temp_file,$img_path)) {
+	                $is_upload = true;
+	            } else {
+	                $msg = '上传出错！';
+	            }
+	        } else {
+	            $msg = '此文件不允许上传';
+	        }
+	    } else {
+	        $msg = UPLOAD_PATH . '文件夹不存在,请手工创建！';
+	    }
+	}
+
+利用方法：上传1.php然后bp抓包修改名字为1.php[空格]
+
+>Win下xx.jpg[空格] 或xx.jpg.这两类文件都是不允许存在的，若这样命名，windows会默认除去空格或点
+
+##Pass-08
+
+黑盒测试知道是黑名单过滤
+
+白盒测试知道可以在文件名结尾添加.绕过
+
+漏洞点为服务端--检查后缀--黑名单--点绕过
+
+源码
+
+	$is_upload = false;
+	$msg = null;
+	if (isset($_POST['submit'])) {
+	    if (file_exists(UPLOAD_PATH)) {
+	        $deny_ext = array(".php",".php5",".php4",".php3",".php2",".html",".htm",".phtml",".pht",".pHp",".pHp5",".pHp4",".pHp3",".pHp2",".Html",".Htm",".pHtml",".jsp",".jspa",".jspx",".jsw",".jsv",".jspf",".jtml",".jSp",".jSpx",".jSpa",".jSw",".jSv",".jSpf",".jHtml",".asp",".aspx",".asa",".asax",".ascx",".ashx",".asmx",".cer",".aSp",".aSpx",".aSa",".aSax",".aScx",".aShx",".aSmx",".cEr",".sWf",".swf",".htaccess",".ini");
+	        $file_name = trim($_FILES['upload_file']['name']);
+	        $file_ext = strrchr($file_name, '.');
+	        $file_ext = strtolower($file_ext); //转换为小写
+	        $file_ext = str_ireplace('::$DATA', '', $file_ext);//去除字符串::$DATA
+	        $file_ext = trim($file_ext); //首尾去空
+	        
+	        if (!in_array($file_ext, $deny_ext)) {
+	            $temp_file = $_FILES['upload_file']['tmp_name'];
+	            $img_path = UPLOAD_PATH.'/'.$file_name;
+	            if (move_uploaded_file($temp_file, $img_path)) {
+	                $is_upload = true;
+	            } else {
+	                $msg = '上传出错！';
+	            }
+	        } else {
+	            $msg = '此文件类型不允许上传！';
+	        }
+	    } else {
+	        $msg = UPLOAD_PATH . '文件夹不存在,请手工创建！';
+	    }
+	}
+
+利用方法：上传1.php然后bp抓包修改文件名为1.php.
+
+<del>小声bb：</del>貌似上传1.php.x也可以？
+
+##Pass-09
+
+黑盒测试知道是黑名单过滤
+
+白盒测试知道可以在文件名结尾添加::$DATA绕过
+
+漏洞点为服务端--检查后缀--黑名单--::$DATA绕过
+
+源码
+
+	$is_upload = false;
+	$msg = null;
+	if (isset($_POST['submit'])) {
+	    if (file_exists(UPLOAD_PATH)) {
+	        $deny_ext = array(".php",".php5",".php4",".php3",".php2",".html",".htm",".phtml",".pht",".pHp",".pHp5",".pHp4",".pHp3",".pHp2",".Html",".Htm",".pHtml",".jsp",".jspa",".jspx",".jsw",".jsv",".jspf",".jtml",".jSp",".jSpx",".jSpa",".jSw",".jSv",".jSpf",".jHtml",".asp",".aspx",".asa",".asax",".ascx",".ashx",".asmx",".cer",".aSp",".aSpx",".aSa",".aSax",".aScx",".aShx",".aSmx",".cEr",".sWf",".swf",".htaccess",".ini");
+	        $file_name = trim($_FILES['upload_file']['name']);
+	        $file_name = deldot($file_name);//删除文件名末尾的点
+	        $file_ext = strrchr($file_name, '.');
+	        $file_ext = strtolower($file_ext); //转换为小写
+	        $file_ext = trim($file_ext); //首尾去空
+	        
+	        if (!in_array($file_ext, $deny_ext)) {
+	            $temp_file = $_FILES['upload_file']['tmp_name'];
+	            $img_path = UPLOAD_PATH.'/'.date("YmdHis").rand(1000,9999).$file_ext;
+	            if (move_uploaded_file($temp_file, $img_path)) {
+	                $is_upload = true;
+	            } else {
+	                $msg = '上传出错！';
+	            }
+	        } else {
+	            $msg = '此文件类型不允许上传！';
+	        }
+	    } else {
+	        $msg = UPLOAD_PATH . '文件夹不存在,请手工创建！';
+	    }
+	}
+
+
+利用方法：上传1.php，然后bp抓包改名字为1.php::$DATA，这里还是利用windows的一个特性。简单讲就是在php+windows的情况下：如果文件名+"::$DATA"会把::$DATA之后的数据当成文件流处理,不会检测后缀名.且保持"::$DATA"之前的文件名
+
+>NTFS文件系统包括对备用数据流的支持。这不是众所周知的功能，主要包括提供与Macintosh文件系统中的文件的兼容性。备用数据流允许文件包含多个数据流。每个文件至少有一个数据流。在Windows中，此默认数据流称为：$DATA。
+
+**相关特性**
+
+>* 假设上传个info.php文件,服务器为windows,info.php内容为<?php phpinfo();
+>* info.php:a.jpg 生成info.php,内容为空
+>* info.php::$DATA 生成info.php,内容为<?php phpinfo();?>
+>* info.php::$INDEX_ALLOCATION  生成info.php文件夹
+>* info.php::$DATA0.jpg生成0.jpg,内容为<?php phpinfo();?>
+
+##Pass-10
+
+黑盒测试知道是黑名单过滤
+
+白盒测试知道可以在文件名结尾.[空格].绕过
+
+漏洞点为服务端--检查后缀--黑名单--配合解析漏洞
+
+源码
+
+	$is_upload = false;
+	$msg = null;
+	if (isset($_POST['submit'])) {
+	    if (file_exists(UPLOAD_PATH)) {
+	        $deny_ext = array(".php",".php5",".php4",".php3",".php2",".html",".htm",".phtml",".pht",".pHp",".pHp5",".pHp4",".pHp3",".pHp2",".Html",".Htm",".pHtml",".jsp",".jspa",".jspx",".jsw",".jsv",".jspf",".jtml",".jSp",".jSpx",".jSpa",".jSw",".jSv",".jSpf",".jHtml",".asp",".aspx",".asa",".asax",".ascx",".ashx",".asmx",".cer",".aSp",".aSpx",".aSa",".aSax",".aScx",".aShx",".aSmx",".cEr",".sWf",".swf",".htaccess",".ini");
+	        $file_name = trim($_FILES['upload_file']['name']);
+	        $file_name = deldot($file_name);//删除文件名末尾的点
+	        $file_ext = strrchr($file_name, '.');
+	        $file_ext = strtolower($file_ext); //转换为小写
+	        $file_ext = str_ireplace('::$DATA', '', $file_ext);//去除字符串::$DATA
+	        $file_ext = trim($file_ext); //首尾去空
+	        
+	        if (!in_array($file_ext, $deny_ext)) {
+	            $temp_file = $_FILES['upload_file']['tmp_name'];
+	            $img_path = UPLOAD_PATH.'/'.$file_name;
+	            if (move_uploaded_file($temp_file, $img_path)) {
+	                $is_upload = true;
+	            } else {
+	                $msg = '上传出错！';
+	            }
+	        } else {
+	            $msg = '此文件类型不允许上传！';
+	        }
+	    } else {
+	        $msg = UPLOAD_PATH . '文件夹不存在,请手工创建！';
+	    }
+	}
+
+这里对文件名只有一个去除末尾点和空格的操作，也就是说上传1.php.[空格].最后处理为1.php.，这也是利用了windows的特点。
+
+##Pass-11
+
+上传1.php，发现文件名变为1.，证明把php替换成了空
+
+漏洞点为服务端--检查后缀--黑名单--双后缀名绕过
+
+源码
+
+	$is_upload = false;
+	$msg = null;
+	if (isset($_POST['submit'])) {
+	    if (file_exists(UPLOAD_PATH)) {
+	        $deny_ext = array("php","php5","php4","php3","php2","html","htm","phtml","pht","jsp","jspa","jspx","jsw","jsv","jspf","jtml","asp","aspx","asa","asax","ascx","ashx","asmx","cer","swf","htaccess","ini");
+	
+	        $file_name = trim($_FILES['upload_file']['name']);
+	        $file_name = str_ireplace($deny_ext,"", $file_name);
+	        $temp_file = $_FILES['upload_file']['tmp_name'];
+	        $img_path = UPLOAD_PATH.'/'.$file_name;        
+	        if (move_uploaded_file($temp_file, $img_path)) {
+	            $is_upload = true;
+	        } else {
+	            $msg = '上传出错！';
+	        }
+	    } else {
+	        $msg = UPLOAD_PATH . '文件夹不存在,请手工创建！';
+	    }
+	}
+
+这里的str_ireplace()是str_place()的升级版，忽略了大小写
+这里把黑名单中的字符都替换成了空，根据函数从左到右检查的特性，如果上传1.phphpp，那处理完变成hpp，如果上传1.pphphp，那处理完变成1.php
+
+利用方式：上传1.pphphp
+
+
 
