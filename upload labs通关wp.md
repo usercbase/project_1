@@ -7,7 +7,7 @@ Upload-labs是一个所有类型的上传漏洞的靶场，截至到现在共有
 
 其涉及的漏洞点包括
 
-<img src="https://raw.githubusercontent.com/picgouser/pic/master/20200227153439.png" width="60%">
+<img src="https://upload-images.jianshu.io/upload_images/11525934-e19630249b9b8764.png" width="80%">
 
 这里上传的图片默认名字为`1.jpg`。上传的php默认名字为`1.php`，内容为`<?php eval($_POST["a"]);?>`
 
@@ -93,7 +93,7 @@ Upload-labs是一个所有类型的上传漏洞的靶场，截至到现在共有
 
 漏洞产生原因：源码只对php、asp、jsp、aspx进行了过滤，但是Apache和php常用的php程序文件后缀有phtml、pht、php3、php4和php5
 
-利用方式
+利用方式：
 
 * 上传1.php3
 
@@ -167,6 +167,8 @@ AddType 是与类型表相关的，描述的是扩展名与文件类型之间的
 **补充：**
 
 最近看到有新的方法
+
+漏洞点为服务端--检查后缀--黑名单--配合解析漏洞--apache陌生后缀解析漏洞
 
 利用方法：上传1.php.xxx
 
@@ -465,6 +467,90 @@ Deny from all
 
 利用方式：上传1.pphphp
 
+##Pass-12
+
+黑盒测试发现是白名单过滤
+
+漏洞点为服务端--检查后缀--白名单--%00截断
+
+源码 
+
+	$is_upload = false;
+	$msg = null;
+	if(isset($_POST['submit'])){
+	    $ext_arr = array('jpg','png','gif');
+	    $file_ext = substr($_FILES['upload_file']['name'],strrpos($_FILES['upload_file']['name'],".")+1);
+	    if(in_array($file_ext,$ext_arr)){
+	        $temp_file = $_FILES['upload_file']['tmp_name'];
+	        $img_path = $_GET['save_path']."/".rand(10, 99).date("YmdHis").".".$file_ext;
+	
+	        if(move_uploaded_file($temp_file,$img_path)){
+	            $is_upload = true;
+	        } else {
+	            $msg = '上传出错！';
+	        }
+	    } else{
+	        $msg = "只允许上传.jpg|.png|.gif类型文件！";
+	    }
+	}
+
+白盒测试发现后缀要为jpg或者其他两个，只能改变文件路径使其索引到php去，也就是用%00截断，跟c语言一眼，php会将%00视为字符串结尾
+
+但对环境有如下要求：
+
+>1、php版本小于5.3.4  
+2、php.ini的magic_quotes_gpc为OFF状态
+
+利用方法：上传1.jpg，然后bp抓包在save_path处改成/upload/1.php%00
+
+##Pass-13
+
+黑盒测试发现是白名单
+
+漏洞点为服务端--检查后缀--白名单--0x00截断
+
+源码
+
+	$is_upload = false;
+	$msg = null;
+	if(isset($_POST['submit'])){
+	    $ext_arr = array('jpg','png','gif');
+	    $file_ext = substr($_FILES['upload_file']['name'],strrpos($_FILES['upload_file']['name'],".")+1);
+	    if(in_array($file_ext,$ext_arr)){
+	        $temp_file = $_FILES['upload_file']['tmp_name'];
+	        $img_path = $_POST['save_path']."/".rand(10, 99).date("YmdHis").".".$file_ext;
+	
+	        if(move_uploaded_file($temp_file,$img_path)){
+	            $is_upload = true;
+	        } else {
+	            $msg = "上传失败";
+	        }
+	    } else {
+	        $msg = "只允许上传.jpg|.png|.gif类型文件！";
+	    }
+	}
+
+发现是POST传值
+
+利用方法：用0x00截断，上传1.jpg然后bp抓包，路径那里填1.php%00，然后选中%00按ctrl+shift+u，或者下面这样
+
+<img src="https://raw.githubusercontent.com/picgouser/pic/master/20200307021159.png" width="60%">
+
+也可以修改hex成00，%00的16进制编码是25 30 30
+
+<img src="https://raw.githubusercontent.com/picgouser/pic/master/20200307021708.png" width="60%">
+
+
+**总结一下Pass-12和Pass-13**
+
+共同点：   
+1. 都要求php版本在5.3.4以下    
+2. 都要求php.ini的magic_quotes_gpc为OFF   
+3. 都是使用截断
+
+不同点：  
+1. GET传值在网址处可以看得到，用%00截断  
+2. POST传值在网址处不可以看到，用0x00截断
 
 
 
